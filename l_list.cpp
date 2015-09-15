@@ -20,16 +20,16 @@ typedef size_t markable_t;
 #define HAS_MARK(p) ((markable_t)p & 0x01)
 #define STRIP_MARK(p) ((node_t*)((markable_t)p & ~(MASK | 0x01)))
 
-int l_find(node_t **pred_ptr, node_t **item_ptr, node_t *head, key_t key);
+bool l_find(node_t *&pred_ptr, node_t *&item_ptr, node_t *head, key_t key);
 
-node_t *l_alloc() {
+static node_t *l_alloc() {
     node_t *head = (node_t*) malloc(sizeof(*head));    
     trace("alloc list %p\n", head);
     head->next = NULL;
     return head;
 }
 
-void l_free(node_t *head) {
+static void l_free(node_t *head) {
     node_t *item = head->next;     
     while (item) {
         node_t *next = STRIP_MARK(item->next);
@@ -39,10 +39,10 @@ void l_free(node_t *head) {
     free(head);
 }
 
-value_t l_insert(node_t *head, key_t key, value_t val) {
+static value_t l_insert(node_t *head, key_t key, value_t val) {
     node_t *pred, *item, *new_item;
-    while (TRUE) {
-        if (l_find(&pred, &item, head, key)) { /* update its value */
+    while (true) {
+        if (l_find(pred, item, head, key)) { /* update its value */
             /* 更新值时，使用item->val互斥，NULL_VALUE表示被删除 */
             node_t *sitem = STRIP_MARK(item);
             value_t old_val = sitem->val;
@@ -77,12 +77,12 @@ value_t l_insert(node_t *head, key_t key, value_t val) {
     return NULL_VALUE;
 }
 
-int l_remove(node_t *head, key_t key) {
+static int l_remove(node_t *head, key_t key) {
     node_t *pred, *item, *sitem;
-    while (TRUE) {
-        if (!l_find(&pred, &item, head, key)) {
+    while (true) {
+        if (!l_find(pred, item, head, key)) {
             trace("remove item failed %d\n", key);
-            return FALSE;
+            return false;
         }
         sitem = STRIP_MARK(item);
         node_t *inext = sitem->next;
@@ -96,14 +96,14 @@ int l_remove(node_t *head, key_t key) {
         if (CAS(&pred->next, item, TAG(STRIP_MARK(sitem->next), tag))) {
             trace("remove item %p success\n", item);
             haz_defer_free(sitem);
-            return TRUE;
+            return true;
         }
         trace("cas item remove item %p failed\n", item);
     }
-    return FALSE;
+    return false;
 }
 
-int l_find(node_t **pred_ptr, node_t **item_ptr, node_t *head, key_t key) {
+bool l_find(node_t *&pred_ptr, node_t *&item_ptr, node_t *head, key_t key) {
     node_t *pred = head;
     node_t *item = head->next;
     /* pred和next会被使用，所以进行标记 */
@@ -123,25 +123,25 @@ int l_find(node_t **pred_ptr, node_t **item_ptr, node_t *head, key_t key) {
         int d = KEY_CMP(sitem->key, key);
         if (d >= 0) {
             trace("item %p match key %d, pred %p\n", item, key, pred);
-            *pred_ptr = pred;
-            *item_ptr = item;
-            return d == 0 ? TRUE : FALSE;
+            pred_ptr = pred;
+            item_ptr = item;
+            return d == 0 ? true : false;
         }
         pred = item;
         item = sitem->next;
     } 
     trace("not found key %d\n", key);
-    *pred_ptr = pred;
-    *item_ptr = NULL;
-    return FALSE;
+    pred_ptr = pred;
+    item_ptr = NULL;
+    return false;
 }
 
-int l_exist(node_t *head, key_t key) {
+static bool l_exist(node_t *head, key_t key) {
     node_t *pred, *item;
-    return l_find(&pred, &item, head, key);
+    return l_find(pred, item, head, key);
 }
 
-int l_count(node_t *head) {
+static int l_count(node_t *head) {
     int cnt = 0;
     node_t *item = STRIP_MARK(head->next);
     while (item) {
@@ -153,10 +153,44 @@ int l_count(node_t *head) {
     return cnt;
 }    
 
-value_t l_lookup(node_t *head, key_t key) {
+static value_t l_lookup(node_t *head, key_t key) {
     node_t *pred, *item;
-    if (l_find(&pred, &item, head, key)) {
+    if (l_find(pred, item, head, key)) {
         return STRIP_MARK(item)->val;
     }
     return NULL_VALUE;
+}
+
+list_t::list_t() 
+{
+	head = l_alloc();
+}
+
+list_t::~list_t()
+{
+	l_free(head);
+}
+
+int list_t::insert(key_t key, value_t val)
+{
+	return l_insert(head, key, val);
+}
+
+int list_t::remove(key_t key)
+{
+	return l_remove(head, key);
+}
+
+value_t list_t::lookup(key_t key)
+{
+	return l_lookup(head, key);
+}
+
+bool list_t::exist(key_t key)
+{
+	return l_exist(head, key);
+}
+int list_t::count() const
+{
+	return l_count(head);
 }

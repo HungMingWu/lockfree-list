@@ -9,6 +9,7 @@ typedef void* hazard_t;
 hazard_t *haz_get(int idx);
 void haz_defer_free(void *p);
 void haz_gc();
+
 #define haz_set_ptr(haz, p) (*(void**)haz) = p
 
 #endif 

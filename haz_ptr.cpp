@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <atomic>
 
 #define HAZ_MAX_COUNT HAZ_MAX_THREAD * HAZ_MAX_COUNT_PER_THREAD
 
@@ -15,28 +16,28 @@ typedef struct free_t {
     struct free_t *next;
 } free_t;
 
-static int _tidSeed = 0;
+static std::atomic<int> _tidSeed(0);
 static hazard_t _haz_array[HAZ_MAX_COUNT];
 /* a simple link list to save pending free pointers */
 static free_t _free_list[HAZ_MAX_THREAD];
 
 static int get_thread_id() {
-    static __thread int _tid = -1;
+    static thread_local int _tid = -1;
     if (_tid >= 0) return _tid;
-    _tid = ATOMIC_INC(&_tidSeed);
+    _tid = _tidSeed++;
     _free_list[_tid].next = NULL;
     return _tid; 
 }
 
-static int haz_confict(int self, void *p) {
-    int self_p = self * HAZ_MAX_COUNT_PER_THREAD;
-    for (int i = 0; i < HAZ_MAX_COUNT; ++i) {
+static bool haz_confict(int self, void *p) {
+    int self_p = self * HAZ_MAX_COUNT_PER_THREAD, i;
+    for (i = 0; i < HAZ_MAX_COUNT; ++i) {
         if (i >= self_p && i < self_p + HAZ_MAX_COUNT_PER_THREAD)
             continue; /* skip self */
         if (_haz_array[i] == p)
-            return TRUE;
+            return true;
     }
-    return FALSE;
+    return false;
 }
 
 hazard_t *haz_get(int idx) {

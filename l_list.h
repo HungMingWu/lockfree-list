@@ -9,10 +9,6 @@
 
 #include "common.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif 
-
 /* test purpose */
 typedef int key_t;
 typedef int value_t;
@@ -26,16 +22,16 @@ typedef struct node_t {
     struct node_t *next;
 } node_t;
 
-node_t *l_alloc();
-void l_free(node_t *head);
-int l_insert(node_t *head, key_t key, value_t val);
-int l_remove(node_t *head, key_t key);
-int l_count(node_t *head);
-int l_exist(node_t *head, key_t key);
-value_t l_lookup(node_t *head, key_t key);
-
-#ifdef __cplusplus
-}
-#endif 
+class list_t {
+	node_t *head;
+public:
+	list_t();
+	~list_t();
+	int insert(key_t key, value_t val);
+	int remove(key_t key);
+	value_t lookup(key_t key);
+	bool exist(key_t key);
+	int count() const;
+};
 
 #endif
